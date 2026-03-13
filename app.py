@@ -35,6 +35,16 @@ import segment_recording as seg_engine
 # ---------------------------------------------------------------------------
 app = Flask(__name__, static_folder=None)
 
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Return JSON instead of HTML for all unhandled errors on /api routes."""
+    import traceback
+    if request.path.startswith("/api"):
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+    raise e
+
+
 # These are set at startup from --project_dir
 PROJECT_ROOT = None
 RECORDINGS_DIR = None
@@ -298,13 +308,15 @@ def api_detect_all():
             "stimlist": cond_cfg.get("stimlist"),
             "parameters": params,
         }
-        # Reuse the single-condition detect
-        with app.test_request_context(json=cond_data):
-            resp = api_detect()
-            if isinstance(resp, tuple):
-                results.append({"condition": cond_cfg["condition"], "error": resp[0].json["error"]})
-            else:
-                results.append(resp.json)
+        try:
+            with app.test_request_context(json=cond_data):
+                resp = api_detect()
+                if isinstance(resp, tuple):
+                    results.append({"condition": cond_cfg["condition"], "error": resp[0].get_json()["error"]})
+                else:
+                    results.append(resp.get_json())
+        except Exception as exc:
+            results.append({"condition": cond_cfg["condition"], "error": str(exc)})
 
     return jsonify(results)
 
@@ -451,12 +463,15 @@ def api_export_all():
             "condition": cond,
             "selected_tokens": sel,
         }
-        with app.test_request_context(json=cond_data):
-            resp = api_export()
-            if isinstance(resp, tuple):
-                results.append({"condition": cond, "error": resp[0].json["error"]})
-            else:
-                results.append({"condition": cond, **resp.json})
+        try:
+            with app.test_request_context(json=cond_data):
+                resp = api_export()
+                if isinstance(resp, tuple):
+                    results.append({"condition": cond, "error": resp[0].get_json()["error"]})
+                else:
+                    results.append({"condition": cond, **resp.get_json()})
+        except Exception as exc:
+            results.append({"condition": cond, "error": str(exc)})
 
     return jsonify(results)
 

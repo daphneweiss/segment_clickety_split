@@ -1,0 +1,10 @@
+Flask>=3.0
+numpy>=2.0
+scipy>=1.10
+soundfile>=0.12
+praat-parselmouth>=0.4
+matplotlib>=3.8
+noisereduce>=3.0
+silero-vad
+onnxruntime
+tqdm>=4.60

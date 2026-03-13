@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+*.pkl
+sessions/
+
+# PyInstaller build artifacts — distribute via GitHub Releases, not committed to repo
+dist/
+build/
+*.spec.bak

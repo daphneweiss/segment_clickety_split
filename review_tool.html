@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Segment Review Tool v3.1</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Sans+3:wght@300;400;500;600&display=swap');
+  :root {
+    --bg: #1a1b1e; --surface: #25262b; --surface2: #2c2e33; --border: #373a40;
+    --text: #c1c2c5; --text-dim: #909296; --text-bright: #e9ecef;
+    --accent: #69b7a5; --accent-dim: #3d8b7a;
+    --word: #69b7a5; --intro: #888; --xtalk: #c0a050;
+    --danger: #e05252; --warn: #e6854a; --best: #f7c948;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Source Sans 3',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .mono { font-family:'JetBrains Mono',monospace; }
+  button { font-family:'Source Sans 3',sans-serif; cursor:pointer; }
+  input { font-family:'Source Sans 3',sans-serif; }
+
+  .topbar { padding:10px 20px; border-bottom:1px solid var(--border); background:var(--surface); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .topbar h1 { font-size:14px; font-weight:600; color:var(--text-bright); }
+  .topbar .status { font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; margin-left:auto; }
+
+  .load-panel { padding:10px 20px; border-bottom:1px solid var(--border); background:var(--surface); display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .load-panel label { font-size:12px; color:var(--text-dim); display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .load-panel input[type="file"] { display:none; }
+  .lbtn { padding:4px 10px; border:1px solid var(--border); border-radius:3px; background:var(--surface2); color:var(--text); font-size:11px; cursor:pointer; }
+  .lbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .lbtn.ok { border-color:var(--accent); color:var(--accent); }
+  .fname { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--accent); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sinput { background:var(--surface2); border:1px solid var(--border); border-radius:3px; color:var(--accent); font-family:'JetBrains Mono',monospace; font-size:11px; padding:4px 8px; width:60px; outline:none; }
+  .sinput:focus { border-color:var(--accent); }
+
+  .mode-tabs { display:flex; gap:0; padding:0 20px; background:var(--surface); border-bottom:1px solid var(--border); }
+  .mode-tab { padding:8px 18px; font-size:12px; font-weight:600; color:var(--text-dim); border:none; background:transparent; border-bottom:2px solid transparent; transition:all 0.15s; }
+  .mode-tab:hover { color:var(--text); }
+  .mode-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* REVIEW MODE */
+  .review-container { display:none; flex-direction:column; height:calc(100vh - 145px); }
+  .review-container.active { display:flex; }
+
+  .review-progress { padding:8px 20px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+  .progress-bar { flex:1; height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; }
+  .progress-fill { height:100%; background:var(--accent); transition:width 0.3s; }
+  .progress-text { font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; min-width:100px; text-align:right; }
+
+  .review-main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+  .review-vis { flex:1; display:flex; flex-direction:column; min-height:0; }
+  .review-waveform { flex:3; position:relative; background:#1e1f23; min-height:100px; }
+  .review-waveform canvas { position:absolute; top:0; left:0; }
+  .review-spectrogram { flex:2; position:relative; background:#12131a; min-height:80px; border-top:1px solid var(--border); }
+  .review-spectrogram canvas { position:absolute; top:0; left:0; }
+
+  .review-controls { padding:14px 20px; background:var(--surface); border-top:1px solid var(--border); }
+  .review-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .review-row:last-child { margin-bottom:0; }
+  .review-label { font-size:11px; color:var(--text-dim); min-width:60px; }
+
+  .rbtn { padding:6px 16px; border:1px solid var(--border); border-radius:4px; background:var(--surface2); color:var(--text); font-size:12px; transition:all 0.15s; }
+  .rbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .rbtn.primary { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:600; }
+  .rbtn.primary:hover { opacity:0.85; }
+  .rbtn.danger { color:var(--danger); }
+  .rbtn.danger:hover { border-color:var(--danger); }
+  .rbtn.active { background:var(--accent-dim); color:white; border-color:var(--accent); }
+  .rbtn.warn-active { background:var(--warn); color:var(--bg); border-color:var(--warn); font-weight:600; }
+  .rbtn:disabled { opacity:0.3; cursor:default; }
+
+  .word-selector { position:relative; }
+  .word-input {
+    background:var(--surface2); border:1px solid var(--border); border-radius:4px;
+    color:var(--text-bright); font-size:14px; font-weight:600; padding:6px 12px; width:240px; outline:none;
+  }
+  .word-input:focus { border-color:var(--accent); }
+  .word-dropdown {
+    position:absolute; top:100%; left:0; width:240px; z-index:50;
+    background:var(--surface2); border:1px solid var(--accent-dim); border-top:none;
+    border-radius:0 0 4px 4px; max-height:200px; overflow-y:auto; display:none;
+  }
+  .word-dropdown.visible { display:block; }
+  .word-dropdown .wd-item { padding:5px 12px; font-size:13px; cursor:pointer; color:var(--text); }
+  .word-dropdown .wd-item:hover, .word-dropdown .wd-item.active { background:var(--accent-dim); color:white; }
+  .word-dropdown .wd-item .wd-match { color:var(--accent); font-weight:600; }
+
+  .token-info { font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
+
+  /* SELECT BEST MODE */
+  .select-container { display:none; flex-direction:column; height:calc(100vh - 145px); }
+  .select-container.active { display:flex; }
+
+  .select-scroll { flex:1; overflow-y:auto; padding:16px 20px; }
+  .word-group { margin-bottom:20px; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .word-group-header { padding:8px 14px; background:var(--surface2); font-size:13px; font-weight:600; color:var(--text-bright); display:flex; align-items:center; gap:8px; }
+  .word-group-header .wg-count { font-size:10px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
+
+  .token-row { padding:6px 14px; border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; cursor:pointer; transition:background 0.1s; }
+  .token-row:hover { background:rgba(105,183,165,0.05); }
+  .token-row.selected { background:rgba(247,201,72,0.08); }
+  .token-row .t-radio { width:16px; height:16px; border:2px solid var(--border); border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .token-row.selected .t-radio { border-color:var(--best); }
+  .token-row.selected .t-radio::after { content:''; width:8px; height:8px; border-radius:50%; background:var(--best); }
+  .token-row .t-name { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text); min-width:160px; }
+  .token-row .t-dur { font-size:10px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
+  .token-row .t-play { padding:2px 8px; border:1px solid var(--border); border-radius:3px; background:transparent; color:var(--text-dim); font-size:10px; cursor:pointer; }
+  .token-row .t-play:hover { border-color:var(--accent); color:var(--accent); }
+
+  .select-export { padding:12px 20px; border-top:1px solid var(--border); background:var(--surface); display:flex; gap:10px; align-items:center; }
+
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--surface2); color:var(--text-bright); padding:8px 18px; border-radius:6px; font-size:12px; border:1px solid var(--border); transition:transform 0.3s; z-index:100; pointer-events:none; }
+  .toast.visible { transform:translateX(-50%) translateY(0); }
+  .shortcut-bar { padding:4px 20px; font-size:9px; color:var(--text-dim); border-top:1px solid var(--border); background:var(--surface); }
+
+  .add-mode-banner { display:none; padding:6px 16px; background:var(--warn); color:var(--bg); font-size:12px; font-weight:600; text-align:center; }
+  .add-mode-banner.visible { display:block; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Segment Review Tool v3.1</h1>
+  <div class="status" id="statusText">Load files to begin</div>
+</div>
+
+<div class="load-panel">
+  <label><span class="lbtn" id="aBtn">Audio</span><input type="file" id="aFile" accept=".wav,.WAV"><span class="fname" id="aName"></span></label>
+  <label><span class="lbtn" id="jBtn">Segments</span><input type="file" id="jFile" accept=".json"><span class="fname" id="jName"></span></label>
+  <span style="font-size:11px;color:var(--text-dim)">Speaker:</span>
+  <input type="text" id="spkInput" class="sinput" placeholder="m1" spellcheck="false">
+  <span class="fname" id="condLabel"></span>
+</div>
+
+<div class="mode-tabs">
+  <button class="mode-tab active" onclick="switchMode('review')">Review Tokens</button>
+  <button class="mode-tab" onclick="switchMode('select')">Select Best</button>
+</div>
+
+<!-- REVIEW MODE -->
+<div class="review-container active" id="reviewMode">
+  <div class="review-progress">
+    <div class="progress-bar"><div class="progress-fill" id="progFill" style="width:0%"></div></div>
+    <div class="progress-text" id="progText">0 / 0</div>
+  </div>
+  <div class="add-mode-banner" id="addBanner">ADD TOKEN MODE — click waveform to set start boundary</div>
+  <div class="review-main">
+    <div class="review-vis">
+      <div class="review-waveform" id="revWaveWrap">
+        <canvas id="revWaveCanvas"></canvas>
+        <canvas id="revOverCanvas"></canvas>
+        <canvas id="revIntCanvas"></canvas>
+      </div>
+      <div class="review-spectrogram" id="revSpecWrap">
+        <canvas id="revSpecCanvas"></canvas>
+        <canvas id="revSpecOverCanvas"></canvas>
+        <canvas id="revSpecIntCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="review-controls">
+    <div class="review-row">
+      <span class="review-label">Playback</span>
+      <button class="rbtn" onclick="rvPlay()" id="rvPlayBtn">▶ Play</button>
+      <button class="rbtn" onclick="rvPlayCtx()">▶ Context</button>
+      <span class="token-info" id="rvTimeInfo">--</span>
+    </div>
+    <div class="review-row">
+      <span class="review-label">Label</span>
+      <div class="word-selector">
+        <input type="text" class="word-input" id="rvWordInput" autocomplete="off" spellcheck="false">
+        <div class="word-dropdown" id="rvWordDrop"></div>
+      </div>
+      <span class="token-info" id="rvTokenNum">token ? of ?</span>
+    </div>
+    <div class="review-row">
+      <span class="review-label">Action</span>
+      <button class="rbtn primary" onclick="rvAccept()">✓ Accept (Enter)</button>
+      <button class="rbtn danger" onclick="rvReject()">✕ Reject (R)</button>
+      <button class="rbtn" onclick="rvSkip()">→ Skip (S)</button>
+      <button class="rbtn" onclick="rvPrev()" id="rvPrevBtn" disabled>← Back</button>
+      <button class="rbtn" onclick="rvAddTokenStart()" id="rvAddBtn">➕ Add Token</button>
+    </div>
+  </div>
+  <div class="shortcut-bar" style="display:flex;align-items:center;gap:10px;">
+    <span>Space = play · Enter = accept · R = reject · S = skip · ← back · A = add token · drag boundaries</span>
+    <button class="rbtn primary" onclick="exportReviewedJSON()" style="margin-left:auto;padding:4px 12px;font-size:11px;">Export Reviewed JSON</button>
+  </div>
+</div>
+
+<!-- SELECT BEST MODE -->
+<div class="select-container" id="selectMode">
+  <div class="select-scroll" id="selectScroll"></div>
+  <div class="select-export">
+    <button class="rbtn primary" onclick="exportSelections()" id="selExportBtn" disabled>Export JSON</button>
+    <button class="rbtn primary" onclick="exportTokensZIP()" id="selWavBtn" disabled>⬇ Export WAVs (ZIP)</button>
+    <span class="token-info" id="selInfo">Select best token for each word</span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============ STATE ============
+let audioBuf=null, actx=null, srcNode=null;
+let segs=[], stimList=[], spkId='', cond='';
+let curIdx=0;
+let wordSegs=[];
+let reviewState=[];
+let bestSelections={};
+let viewStart=0, viewEnd=0; // fixed during drag — only recalculated on token change
+let addMode=false, addStart=null;
+let rawSamples=null;
+
+// ============ LOAD ============
+document.getElementById('aFile').addEventListener('change', async e => {
+  const f=e.target.files[0]; if(!f) return;
+  document.getElementById('aName').textContent=f.name;
+  document.getElementById('aBtn').classList.add('ok');
+  actx=actx||new(window.AudioContext||window.webkitAudioContext)();
+  audioBuf=await actx.decodeAudioData(await f.arrayBuffer());
+  rawSamples=audioBuf.getChannelData(0);
+  if(segs.length) initReview();
+  toast(`Audio: ${audioBuf.duration.toFixed(1)}s`);
+});
+document.getElementById('jFile').addEventListener('change', async e => {
+  const f=e.target.files[0]; if(!f) return;
+  document.getElementById('jName').textContent=f.name;
+  document.getElementById('jBtn').classList.add('ok');
+  const d=JSON.parse(await f.text());
+  segs=d.segments||[]; stimList=d.stimulus_list||[];
+  spkId=d.speaker_id||''; cond=d.condition||'';
+  document.getElementById('spkInput').value=spkId;
+  if(cond) document.getElementById('condLabel').textContent=cond;
+  segs.forEach((s,i)=>{ s._i=i; s.accepted=s.accepted!==false; });
+  if(audioBuf) initReview();
+  toast(`Loaded ${segs.length} segments (${stimList.length} valid names)`);
+});
+document.getElementById('spkInput').addEventListener('change', e=>{ spkId=e.target.value.trim(); });
+
+// ============ MODE SWITCH ============
+function switchMode(mode) {
+  document.querySelectorAll('.mode-tab').forEach((t,i)=>t.classList.toggle('active', (i===0&&mode==='review')||(i===1&&mode==='select')));
+  document.getElementById('reviewMode').classList.toggle('active', mode==='review');
+  document.getElementById('selectMode').classList.toggle('active', mode==='select');
+  if(mode==='select') buildSelectView();
+}
+
+// ============ FFT & SPECTROGRAM ============
+function fft(re, im) {
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){
+    let bit=n>>1;
+    for(;j&bit;bit>>=1) j^=bit;
+    j^=bit;
+    if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]];}
+  }
+  for(let len=2;len<=n;len<<=1){
+    const ang=-2*Math.PI/len, wRe=Math.cos(ang), wIm=Math.sin(ang);
+    for(let i=0;i<n;i+=len){
+      let cR=1,cI=0;
+      for(let j=0;j<len/2;j++){
+        const h=len/2, tR=cR*re[i+j+h]-cI*im[i+j+h], tI=cR*im[i+j+h]+cI*re[i+j+h];
+        re[i+j+h]=re[i+j]-tR; im[i+j+h]=im[i+j]-tI;
+        re[i+j]+=tR; im[i+j]+=tI;
+        const nR=cR*wRe-cI*wIm; cI=cR*wIm+cI*wRe; cR=nR;
+      }
+    }
+  }
+}
+
+function computeSpectrogram(samples, sr, fftSize, hop) {
+  const nFrames=Math.max(0,Math.floor((samples.length-fftSize)/hop)+1);
+  const nBins=fftSize/2+1;
+  const maxBin=Math.min(nBins, Math.ceil(8000/(sr/fftSize))); // up to 8 kHz
+  const hann=new Float32Array(fftSize);
+  for(let i=0;i<fftSize;i++) hann[i]=0.5*(1-Math.cos(2*Math.PI*i/(fftSize-1)));
+  const spec=new Float32Array(nFrames*maxBin);
+  for(let f=0;f<nFrames;f++){
+    const re=new Float32Array(fftSize), im=new Float32Array(fftSize);
+    const off=f*hop;
+    for(let i=0;i<fftSize;i++) re[i]=(samples[off+i]||0)*hann[i];
+    fft(re,im);
+    for(let b=0;b<maxBin;b++) spec[f*maxBin+b]=Math.sqrt(re[b]*re[b]+im[b]*im[b]);
+  }
+  return {spec, nFrames, nBins:maxBin, hop, fftSize};
+}
+
+function specColor(t) {
+  t=Math.max(0,Math.min(1,t));
+  if(t<0.33){const u=t/0.33;return[0,Math.round(u*80),Math.round(40+u*160)];}
+  if(t<0.66){const u=(t-0.33)/0.33;return[Math.round(u*255),Math.round(80+u*175),Math.round(200-u*100)];}
+  const u=(t-0.66)/0.34;return[255,255,Math.round(100+u*155)];
+}
+
+function drawSpectrogram(seg) {
+  const canvas=document.getElementById('revSpecCanvas');
+  const ctx=canvas.getContext('2d');
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#12131a'; ctx.fillRect(0,0,w,h);
+  if(!rawSamples||!audioBuf) return;
+
+  const sr=audioBuf.sampleRate;
+  const s0=Math.max(0,Math.floor(viewStart*sr)), s1=Math.min(rawSamples.length,Math.floor(viewEnd*sr));
+  const region=rawSamples.slice(s0,s1);
+  if(region.length<512) return;
+
+  const fftSize=512, hop=128;
+  const {spec,nFrames,nBins}=computeSpectrogram(region,sr,fftSize,hop);
+  if(nFrames===0) return;
+
+  let maxVal=0;
+  for(let i=0;i<spec.length;i++) if(spec[i]>maxVal) maxVal=spec[i];
+  if(maxVal===0) maxVal=1;
+
+  const tmp=document.createElement('canvas');
+  tmp.width=nFrames; tmp.height=nBins;
+  const tc=tmp.getContext('2d');
+  const img=tc.createImageData(nFrames,nBins);
+  for(let f=0;f<nFrames;f++){
+    for(let b=0;b<nBins;b++){
+      const val=spec[f*nBins+b]/maxVal;
+      const db=20*Math.log10(val+1e-6);
+      const norm=Math.max(0,Math.min(1,(db+60)/60));
+      const[r,g,bl]=specColor(norm);
+      const y=nBins-1-b;
+      const idx=(y*nFrames+f)*4;
+      img.data[idx]=r;img.data[idx+1]=g;img.data[idx+2]=bl;img.data[idx+3]=255;
+    }
+  }
+  tc.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(tmp,0,0,w,h);
+
+  // Boundary overlay
+  const oc=document.getElementById('revSpecOverCanvas');
+  const octx=oc.getContext('2d');
+  octx.clearRect(0,0,w,h);
+  const x1=((seg.start-viewStart)/(viewEnd-viewStart))*w;
+  const x2=((seg.end-viewStart)/(viewEnd-viewStart))*w;
+  octx.fillStyle='rgba(0,0,0,0.25)';
+  octx.fillRect(0,0,x1,h); octx.fillRect(x2,0,w-x2,h);
+  octx.strokeStyle='#f7c948'; octx.lineWidth=2;
+  octx.beginPath(); octx.moveTo(x1,0); octx.lineTo(x1,h); octx.stroke();
+  octx.beginPath(); octx.moveTo(x2,0); octx.lineTo(x2,h); octx.stroke();
+  octx.fillStyle='rgba(255,255,255,0.4)'; octx.font='9px JetBrains Mono';
+  octx.fillText('8kHz',2,10); octx.fillText('0',2,h-3);
+
+  // Add-mode marker on spectrogram too
+  if(addMode && addStart!==null){
+    const ax=((addStart-viewStart)/(viewEnd-viewStart))*w;
+    octx.strokeStyle='#4ade80'; octx.lineWidth=2; octx.setLineDash([4,4]);
+    octx.beginPath(); octx.moveTo(ax,0); octx.lineTo(ax,h); octx.stroke();
+    octx.setLineDash([]);
+  }
+}
+
+// ============ REVIEW MODE ============
+function initReview() {
+  rebuildWordSegs();
+  curIdx=0;
+  resizeAllCanvases();
+  showCurrentToken();
+  window.addEventListener('resize', ()=>{ resizeAllCanvases(); if(wordSegs.length) drawAll(segs[wordSegs[curIdx]]); });
+  document.getElementById('statusText').textContent=
+    `${wordSegs.length} tokens · ${stimList.length} words · ${audioBuf.duration.toFixed(1)}s`;
+}
+
+function rebuildWordSegs() {
+  wordSegs=[];
+  segs.forEach((s,i)=>{ if(s.segment_type==='word') wordSegs.push(i); });
+  reviewState=wordSegs.map(()=>({reviewed:false, accepted:true}));
+}
+
+function resizeAllCanvases() {
+  resizeSet('revWaveWrap',['revWaveCanvas','revOverCanvas','revIntCanvas']);
+  resizeSet('revSpecWrap',['revSpecCanvas','revSpecOverCanvas','revSpecIntCanvas']);
+}
+function resizeSet(wrapId, ids) {
+  const wrap=document.getElementById(wrapId);
+  const w=wrap.clientWidth, h=wrap.clientHeight, dpr=devicePixelRatio||1;
+  for(const id of ids){
+    const c=document.getElementById(id);
+    c.width=w*dpr; c.height=h*dpr; c.style.width=w+'px'; c.style.height=h+'px';
+    c.getContext('2d').scale(dpr,dpr);
+  }
+}
+
+function showCurrentToken() {
+  if(!audioBuf || wordSegs.length===0) return;
+  const segIdx=wordSegs[curIdx];
+  const seg=segs[segIdx];
+
+  const reviewed=reviewState.filter(r=>r.reviewed).length;
+  document.getElementById('progFill').style.width=`${(reviewed/wordSegs.length)*100}%`;
+  document.getElementById('progText').textContent=`${curIdx+1} / ${wordSegs.length} (${reviewed} done)`;
+  document.getElementById('rvPrevBtn').disabled=curIdx===0;
+
+  document.getElementById('rvWordInput').value=seg.assigned_name;
+  document.getElementById('rvTimeInfo').textContent=
+    `${seg.start.toFixed(3)}–${seg.end.toFixed(3)}s (${seg.duration_ms.toFixed(0)}ms)`;
+  document.getElementById('rvTokenNum').textContent=
+    `token ${seg.token_index||'?'} of ${seg.cluster_size||'?'}`;
+
+  // Set fixed view window — stays constant during boundary drag
+  const pad=0.8;
+  viewStart=Math.max(0, seg.start-pad);
+  viewEnd=Math.min(audioBuf.duration, seg.end+pad);
+
+  drawAll(seg);
+  setupInteraction(seg);
+}
+
+function drawAll(seg) {
+  drawRevWaveform(seg);
+  drawSpectrogram(seg);
+}
+
+function drawRevWaveform(seg) {
+  const raw=audioBuf.getChannelData(0);
+  const sr=audioBuf.sampleRate;
+  const wc=document.getElementById('revWaveCanvas'), ctx=wc.getContext('2d');
+  const w=wc.clientWidth, h=wc.clientHeight;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#2a2d32'; ctx.fillRect(0,0,w,h);
+
+  const s0=Math.floor(viewStart*sr), s1=Math.floor(viewEnd*sr);
+  const spp=Math.max(1,Math.floor((s1-s0)/w));
+  const mid=h/2;
+  ctx.strokeStyle='#5c7a8a'; ctx.lineWidth=1; ctx.beginPath();
+  for(let px=0;px<w;px++){
+    const ss=s0+px*spp; let mn=1,mx=-1;
+    for(let s=ss;s<Math.min(ss+spp,raw.length);s++){if(s>=0){const v=raw[s];if(v<mn)mn=v;if(v>mx)mx=v;}}
+    ctx.moveTo(px,mid-mx*mid*0.9); ctx.lineTo(px,mid-mn*mid*0.9);
+  }
+  ctx.stroke();
+
+  // Overlay
+  const oc=document.getElementById('revOverCanvas'), octx=oc.getContext('2d');
+  octx.clearRect(0,0,w,h);
+  const x1=((seg.start-viewStart)/(viewEnd-viewStart))*w;
+  const x2=((seg.end-viewStart)/(viewEnd-viewStart))*w;
+
+  octx.fillStyle='rgba(0,0,0,0.3)';
+  octx.fillRect(0,0,x1,h); octx.fillRect(x2,0,w-x2,h);
+
+  octx.strokeStyle='#f7c948'; octx.lineWidth=2;
+  octx.beginPath(); octx.moveTo(x1,0); octx.lineTo(x1,h); octx.stroke();
+  octx.beginPath(); octx.moveTo(x2,0); octx.lineTo(x2,h); octx.stroke();
+
+  // Handle tabs with L/R labels
+  octx.fillStyle='#f7c948';
+  octx.fillRect(x1-4,0,8,12); octx.fillRect(x1-4,h-12,8,12);
+  octx.fillRect(x2-4,0,8,12); octx.fillRect(x2-4,h-12,8,12);
+  octx.fillStyle='#1a1b1e'; octx.font='bold 8px JetBrains Mono'; octx.textAlign='center';
+  octx.fillText('L',x1,9); octx.fillText('R',x2,9);
+  octx.textAlign='start';
+
+  // Add-mode start marker
+  if(addMode && addStart!==null){
+    const ax=((addStart-viewStart)/(viewEnd-viewStart))*w;
+    octx.strokeStyle='#4ade80'; octx.lineWidth=2; octx.setLineDash([4,4]);
+    octx.beginPath(); octx.moveTo(ax,0); octx.lineTo(ax,h); octx.stroke();
+    octx.setLineDash([]);
+  }
+}
+
+// ============ INTERACTION ============
+function setupInteraction(seg) {
+  setupDragCanvas('revIntCanvas', seg);
+  setupDragCanvas('revSpecIntCanvas', seg);
+}
+
+function setupDragCanvas(canvasId, seg) {
+  const ic=document.getElementById(canvasId);
+  const newIc=ic.cloneNode(true);
+  ic.parentNode.replaceChild(newIc,ic);
+
+  let dragging=null, downX=null;
+  const w=()=>newIc.clientWidth;
+  const xToT=x=>viewStart+(x/w())*(viewEnd-viewStart);
+  const tToX=t=>((t-viewStart)/(viewEnd-viewStart))*w();
+
+  newIc.addEventListener('mousedown', e=>{
+    const x=e.clientX-newIc.getBoundingClientRect().left;
+    downX=x;
+    if(addMode){ handleAddClick(xToT(x)); return; }
+    const sx=tToX(seg.start), ex=tToX(seg.end);
+    if(Math.abs(x-sx)<10) dragging='start';
+    else if(Math.abs(x-ex)<10) dragging='end';
+  });
+  newIc.addEventListener('mousemove', e=>{
+    const x=e.clientX-newIc.getBoundingClientRect().left;
+    if(dragging){
+      const t=Math.max(0,Math.min(audioBuf.duration,xToT(x)));
+      if(dragging==='start'&&t<seg.end-0.01){ seg.start=Math.round(t*1e4)/1e4; seg.duration_ms=Math.round((seg.end-seg.start)*1e3); }
+      if(dragging==='end'&&t>seg.start+0.01){ seg.end=Math.round(t*1e4)/1e4; seg.duration_ms=Math.round((seg.end-seg.start)*1e3); }
+      drawAll(seg); // viewStart/viewEnd stay fixed — boundaries move independently
+      document.getElementById('rvTimeInfo').textContent=`${seg.start.toFixed(3)}–${seg.end.toFixed(3)}s (${seg.duration_ms.toFixed(0)}ms)`;
+    } else {
+      if(addMode){ newIc.style.cursor='crosshair'; return; }
+      const sx=tToX(seg.start), ex=tToX(seg.end);
+      newIc.style.cursor=(Math.abs(x-sx)<50||Math.abs(x-ex)<50)?'ew-resize':'default';
+    }
+  });
+  newIc.addEventListener('mouseup', e=>{
+    const x=e.clientX-newIc.getBoundingClientRect().left;
+    // Click (no significant drag) within 50px of a boundary → snap it
+    if(!addMode && dragging===null && downX!==null && Math.abs(x-downX)<4){
+      const sx=tToX(seg.start), ex=tToX(seg.end);
+      const dStart=Math.abs(x-sx), dEnd=Math.abs(x-ex);
+      if(dStart<50||dEnd<50){
+        const t=Math.max(0,Math.min(audioBuf.duration,xToT(x)));
+        if(dStart<=dEnd && t<seg.end-0.01){ seg.start=Math.round(t*1e4)/1e4; seg.duration_ms=Math.round((seg.end-seg.start)*1e3); }
+        else if(dEnd<dStart && t>seg.start+0.01){ seg.end=Math.round(t*1e4)/1e4; seg.duration_ms=Math.round((seg.end-seg.start)*1e3); }
+        drawAll(seg);
+        document.getElementById('rvTimeInfo').textContent=`${seg.start.toFixed(3)}–${seg.end.toFixed(3)}s (${seg.duration_ms.toFixed(0)}ms)`;
+      }
+    }
+    dragging=null; downX=null;
+  });
+  newIc.addEventListener('mouseleave', ()=>{ dragging=null; downX=null; });
+}
+
+// ============ ADD TOKEN ============
+function rvAddTokenStart() {
+  if(!audioBuf||wordSegs.length===0) return;
+  addMode=!addMode; addStart=null;
+  document.getElementById('rvAddBtn').classList.toggle('warn-active', addMode);
+  document.getElementById('addBanner').classList.toggle('visible', addMode);
+  if(addMode) document.getElementById('addBanner').textContent='ADD TOKEN MODE — click waveform to set start boundary';
+  drawAll(segs[wordSegs[curIdx]]);
+}
+
+function handleAddClick(t) {
+  if(!addMode) return;
+  t=Math.max(0,Math.min(audioBuf.duration,Math.round(t*1e4)/1e4));
+  if(addStart===null){
+    addStart=t;
+    document.getElementById('addBanner').textContent=`ADD TOKEN — start: ${t.toFixed(3)}s — click to set end (Esc to cancel)`;
+    drawAll(segs[wordSegs[curIdx]]);
+  } else {
+    let s=Math.min(addStart,t), e=Math.max(addStart,t);
+    if(e-s<0.05){ toast('Segment too short'); return; }
+    const label=prompt('Word label for new token:', stimList.length?stimList[0]:'');
+    if(!label){ exitAddMode(); return; }
+    const newSeg={
+      start:s, end:e, duration_ms:Math.round((e-s)*1000*10)/10,
+      segment_type:'word', assigned_name:label, token_index:1,
+      cluster_size:1, status:'manual', accepted:true, _i:segs.length
+    };
+    let insertIdx=segs.length;
+    for(let i=0;i<segs.length;i++){ if(segs[i].start>s){insertIdx=i;break;} }
+    segs.splice(insertIdx,0,newSeg);
+    rebuildWordSegs();
+    for(let i=0;i<wordSegs.length;i++){
+      if(segs[wordSegs[i]]===newSeg){curIdx=i;break;}
+    }
+    exitAddMode();
+    showCurrentToken();
+    toast(`Added token: ${label} [${s.toFixed(3)}–${e.toFixed(3)}s]`);
+  }
+}
+
+function exitAddMode() {
+  addMode=false; addStart=null;
+  document.getElementById('rvAddBtn').classList.remove('warn-active');
+  document.getElementById('addBanner').classList.remove('visible');
+}
+
+// ============ AUTOCOMPLETE ============
+const wInput=document.getElementById('rvWordInput');
+const wDrop=document.getElementById('rvWordDrop');
+let acIdx=-1;
+
+wInput.addEventListener('input', updateWordDrop);
+wInput.addEventListener('focus', updateWordDrop);
+wInput.addEventListener('blur', ()=>setTimeout(()=>wDrop.classList.remove('visible'),150));
+wInput.addEventListener('keydown', e=>{
+  const items=wDrop.querySelectorAll('.wd-item');
+  if(e.key==='ArrowDown'){e.preventDefault();e.stopPropagation();acIdx=Math.min(acIdx+1,items.length-1);items.forEach((it,j)=>it.classList.toggle('active',j===acIdx));if(items[acIdx])items[acIdx].scrollIntoView({block:'nearest'});}
+  else if(e.key==='ArrowUp'){e.preventDefault();e.stopPropagation();acIdx=Math.max(acIdx-1,0);items.forEach((it,j)=>it.classList.toggle('active',j===acIdx));}
+  else if(e.key==='Enter'){e.preventDefault();if(acIdx>=0&&items[acIdx]){wInput.value=items[acIdx].textContent;wDrop.classList.remove('visible');wInput.blur();}}
+  else if(e.key==='Escape'){wDrop.classList.remove('visible');}
+});
+
+function updateWordDrop(){
+  const q=wInput.value.toLowerCase().trim();
+  wDrop.innerHTML=''; acIdx=-1;
+  if(!stimList.length){wDrop.classList.remove('visible');return;}
+  const matches=stimList.filter(s=>s.toLowerCase().includes(q)&&s!==wInput.value);
+  if(!matches.length||!q){wDrop.classList.remove('visible');return;}
+  matches.forEach(name=>{
+    const item=document.createElement('div');
+    item.className='wd-item';
+    const li=name.toLowerCase(),ms=li.indexOf(q);
+    if(ms>=0)item.innerHTML=esc(name.substring(0,ms))+'<span class="wd-match">'+esc(name.substring(ms,ms+q.length))+'</span>'+esc(name.substring(ms+q.length));
+    else item.textContent=name;
+    item.addEventListener('mousedown',e=>{e.preventDefault();wInput.value=name;wDrop.classList.remove('visible');});
+    wDrop.appendChild(item);
+  });
+  wDrop.classList.add('visible');
+}
+function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
+
+// ============ REVIEW ACTIONS ============
+function rvAccept(){
+  if(wordSegs.length===0) return;
+  const seg=segs[wordSegs[curIdx]];
+  seg.assigned_name=wInput.value;
+  seg.accepted=true;
+  reviewState[curIdx]={reviewed:true, accepted:true};
+  rvAdvance();
+}
+function rvReject(){
+  if(wordSegs.length===0) return;
+  segs[wordSegs[curIdx]].accepted=false;
+  reviewState[curIdx]={reviewed:true, accepted:false};
+  rvAdvance();
+}
+function rvSkip(){ rvAdvance(); }
+function rvPrev(){ if(curIdx>0){ curIdx--; showCurrentToken(); } }
+function rvAdvance(){
+  stopAudio();
+  if(curIdx<wordSegs.length-1){ curIdx++; showCurrentToken(); }
+  else {
+    const done=reviewState.filter(r=>r.reviewed).length;
+    document.getElementById('progFill').style.width='100%';
+    document.getElementById('progText').textContent=`Done! ${done}/${wordSegs.length} reviewed`;
+    toast('Review complete — export or switch to Select Best');
+  }
+}
+
+// ============ PLAYBACK ============
+function rvPlay(){
+  if(!audioBuf||!actx) return; stopAudio();
+  const seg=segs[wordSegs[curIdx]];
+  srcNode=actx.createBufferSource(); srcNode.buffer=audioBuf;
+  srcNode.connect(actx.destination); srcNode.start(0,seg.start,seg.end-seg.start);
+  srcNode.onended=()=>stopAudio();
+}
+function rvPlayCtx(){
+  if(!audioBuf||!actx) return; stopAudio();
+  const seg=segs[wordSegs[curIdx]];
+  const s=Math.max(0,seg.start-0.5), dur=seg.end-s+0.5;
+  srcNode=actx.createBufferSource(); srcNode.buffer=audioBuf;
+  srcNode.connect(actx.destination); srcNode.start(0,s,dur);
+  srcNode.onended=()=>stopAudio();
+}
+function playRange(start,end){
+  if(!audioBuf||!actx) return; stopAudio();
+  srcNode=actx.createBufferSource(); srcNode.buffer=audioBuf;
+  srcNode.connect(actx.destination); srcNode.start(0,start,end-start);
+  srcNode.onended=()=>stopAudio();
+}
+function stopAudio(){if(srcNode){try{srcNode.stop();}catch(e){}srcNode=null;}}
+
+// ============ KEYBOARD ============
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'&&addMode){exitAddMode();if(wordSegs.length)drawAll(segs[wordSegs[curIdx]]);return;}
+  if(['INPUT','SELECT'].includes(e.target.tagName)){if(e.key==='Escape')e.target.blur();return;}
+  if(!document.getElementById('reviewMode').classList.contains('active')) return;
+  switch(e.key){
+    case ' ':e.preventDefault();rvPlay();break;
+    case 'Enter':e.preventDefault();rvAccept();break;
+    case 'r':case 'R':rvReject();break;
+    case 's':case 'S':rvSkip();break;
+    case 'ArrowLeft':rvPrev();break;
+    case 'a':case 'A':rvAddTokenStart();break;
+  }
+});
+
+// ============ EXPORT REVIEWED JSON ============
+async function exportReviewedJSON(){
+  spkId=document.getElementById('spkInput').value.trim();
+  const out={
+    audio_file:null, audio_duration:audioBuf?audioBuf.duration:0, sample_rate:audioBuf?audioBuf.sampleRate:0,
+    speaker_id:spkId, condition:cond, stimulus_list:stimList,
+    segments:segs.map(s=>({
+      start:s.start, end:s.end, duration_ms:s.duration_ms,
+      assigned_name:s.assigned_name, segment_type:s.segment_type,
+      token_index:s.token_index, cluster_size:s.cluster_size,
+      status:s.status, accepted:s.accepted!==false,
+    }))
+  };
+  const json=JSON.stringify(out,null,2);
+  const suggestedName='reviewed_segments.json';
+
+  // File System Access API — lets you save directly to experiment/$spk/$cond/
+  if(window.showSaveFilePicker){
+    try{
+      const handle=await showSaveFilePicker({
+        suggestedName,
+        types:[{description:'JSON',accept:{'application/json':['.json']}}]
+      });
+      const writable=await handle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      toast(`Saved: ${handle.name}`);
+      return;
+    }catch(e){if(e.name==='AbortError')return;}
+  }
+  dl(suggestedName,json);
+  const hint=cond?` — save to experiment/${spkId}/${cond}/`:'';
+  toast(`Downloaded ${suggestedName}${hint}`);
+}
+
+// ============ SELECT BEST MODE ============
+function buildSelectView(){
+  const scroll=document.getElementById('selectScroll');
+  scroll.innerHTML='';
+  const groups={};
+  segs.forEach((s,i)=>{
+    if(s.segment_type!=='word'||s.accepted===false) return;
+    if(!groups[s.assigned_name]) groups[s.assigned_name]=[];
+    groups[s.assigned_name].push({seg:s, idx:i});
+  });
+  const words=stimList.length?stimList.filter(w=>groups[w]):Object.keys(groups);
+  words.forEach(word=>{
+    const tokens=groups[word]||[];
+    const grp=document.createElement('div');
+    grp.className='word-group';
+    const hdr=document.createElement('div');
+    hdr.className='word-group-header';
+    hdr.innerHTML=`${esc(word)} <span class="wg-count">${tokens.length} token${tokens.length!==1?'s':''}</span>`;
+    grp.appendChild(hdr);
+    spkId=document.getElementById('spkInput').value.trim();
+    const pfx=spkId?spkId+'_':'';
+    tokens.forEach((tok,ti)=>{
+      const row=document.createElement('div');
+      row.className='token-row';
+      const fname=`${pfx}${word.replace(/[^\w\-.]/g,'_')}-${ti+1}.wav`;
+      const isBest=bestSelections[word]===fname;
+      if(isBest) row.classList.add('selected');
+      row.innerHTML=`
+        <div class="t-radio"></div>
+        <span class="t-name">${esc(fname)}</span>
+        <span class="t-dur">${tok.seg.duration_ms.toFixed(0)}ms</span>
+        <button class="t-play" onclick="event.stopPropagation();playRange(${tok.seg.start},${tok.seg.end})">▶</button>
+      `;
+      row.addEventListener('click',()=>{bestSelections[word]=fname;buildSelectView();});
+      grp.appendChild(row);
+    });
+    scroll.appendChild(grp);
+  });
+  const total=words.length, selected=Object.keys(bestSelections).length;
+  document.getElementById('selInfo').textContent=`${selected}/${total} words selected`;
+  const allSelected=selected>=total&&total>0;
+  document.getElementById('selExportBtn').disabled=!allSelected;
+  document.getElementById('selWavBtn').disabled=!allSelected;
+}
+
+async function exportSelections(){
+  spkId=document.getElementById('spkInput').value.trim();
+  const out={speaker_id:spkId, condition:cond, selections:bestSelections};
+  const json=JSON.stringify(out,null,2);
+  const suggestedName='best_selections.json';
+  if(window.showSaveFilePicker){
+    try{
+      const handle=await showSaveFilePicker({
+        suggestedName,
+        types:[{description:'JSON',accept:{'application/json':['.json']}}]
+      });
+      const writable=await handle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      toast(`Saved: ${handle.name}`);
+      return;
+    }catch(e){if(e.name==='AbortError')return;}
+  }
+  dl(suggestedName,json);
+  toast(`Exported best selections for ${Object.keys(bestSelections).length} words`);
+}
+
+// ============ WAV ENCODER (Float32, mono) ============
+function encodeWAV(samples, sampleRate) {
+  const n=samples.length;
+  const buf=new ArrayBuffer(44+n*4);
+  const v=new DataView(buf);
+  function ws(off,s){for(let i=0;i<s.length;i++)v.setUint8(off+i,s.charCodeAt(i));}
+  ws(0,'RIFF'); v.setUint32(4,36+n*4,true); ws(8,'WAVE');
+  ws(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,3,true); // IEEE float
+  v.setUint16(22,1,true); v.setUint32(24,sampleRate,true);
+  v.setUint32(28,sampleRate*4,true); v.setUint16(32,4,true); v.setUint16(34,32,true);
+  ws(36,'data'); v.setUint32(40,n*4,true);
+  for(let i=0;i<n;i++) v.setFloat32(44+i*4,samples[i],true);
+  return new Uint8Array(buf);
+}
+
+// ============ CRC32 ============
+const _crcT=(()=>{const t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=(c&1)?(0xedb88320^(c>>>1)):(c>>>1);t[i]=c;}return t;})();
+function crc32(d){let c=0xffffffff;for(let i=0;i<d.length;i++)c=_crcT[(c^d[i])&0xff]^(c>>>8);return(c^0xffffffff)>>>0;}
+
+// ============ ZIP BUILDER (STORE — no compression) ============
+function buildZIP(files) {
+  // files: [{name:string, data:Uint8Array}]
+  const enc=new TextEncoder();
+  const locals=[], cdirs=[];
+  let off=0;
+  for(const {name,data} of files){
+    const nb=enc.encode(name), crc=crc32(data), ds=data.length;
+    // Local file header (30 bytes + name)
+    const lh=new Uint8Array(30+nb.length);
+    const lv=new DataView(lh.buffer);
+    lv.setUint32(0,0x04034b50,true); lv.setUint16(4,20,true); lv.setUint16(6,0,true);
+    lv.setUint16(8,0,true); lv.setUint16(10,0,true); lv.setUint16(12,0,true);
+    lv.setUint32(14,crc,true); lv.setUint32(18,ds,true); lv.setUint32(22,ds,true);
+    lv.setUint16(26,nb.length,true); lv.setUint16(28,0,true);
+    lh.set(nb,30);
+    locals.push(lh, data);
+    // Central dir entry (46 bytes + name)
+    const cd=new Uint8Array(46+nb.length);
+    const cv=new DataView(cd.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0,true); cv.setUint16(10,0,true); cv.setUint16(12,0,true); cv.setUint16(14,0,true);
+    cv.setUint32(16,crc,true); cv.setUint32(20,ds,true); cv.setUint32(24,ds,true);
+    cv.setUint16(28,nb.length,true); cv.setUint16(30,0,true); cv.setUint16(32,0,true);
+    cv.setUint16(34,0,true); cv.setUint16(36,0,true); cv.setUint32(38,0,true);
+    cv.setUint32(42,off,true);
+    cd.set(nb,46);
+    cdirs.push(cd);
+    off+=lh.length+ds;
+  }
+  const cdSize=cdirs.reduce((s,e)=>s+e.length,0);
+  const eocd=new Uint8Array(22);
+  const ev=new DataView(eocd.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(4,0,true); ev.setUint16(6,0,true);
+  ev.setUint16(8,files.length,true); ev.setUint16(10,files.length,true);
+  ev.setUint32(12,cdSize,true); ev.setUint32(16,off,true); ev.setUint16(20,0,true);
+  const parts=[...locals,...cdirs,eocd];
+  const total=parts.reduce((s,p)=>s+p.length,0);
+  const out=new Uint8Array(total); let pos=0;
+  for(const p of parts){out.set(p,pos);pos+=p.length;}
+  return out;
+}
+
+// ============ EXPORT TOKENS AS ZIP ============
+async function exportTokensZIP() {
+  if(!audioBuf){toast('Load audio first');return;}
+  spkId=document.getElementById('spkInput').value.trim();
+  const groups={};
+  segs.forEach(s=>{
+    if(s.segment_type!=='word'||s.accepted===false) return;
+    if(!groups[s.assigned_name]) groups[s.assigned_name]=[];
+    groups[s.assigned_name].push(s);
+  });
+  const words=stimList.length?stimList.filter(w=>groups[w]):Object.keys(groups);
+  const pfx=spkId?spkId+'_':'';
+  const sr=audioBuf.sampleRate;
+  const raw=audioBuf.getChannelData(0);
+  const PAD=Math.round(0.010*sr), FADE=Math.round(0.005*sr);
+
+  const files=[];
+  for(const word of words){
+    const tokens=groups[word]||[];
+    const selFname=bestSelections[word];
+    tokens.forEach((tok,ti)=>{
+      const fname=`${pfx}${word.replace(/[^\w\-.]/g,'_')}-${ti+1}.wav`;
+      if(selFname&&fname!==selFname) return; // skip non-selected when selection exists
+      const s0=Math.max(0,Math.round(tok.start*sr)-PAD);
+      const s1=Math.min(raw.length,Math.round(tok.end*sr)+PAD);
+      const chunk=new Float32Array(raw.slice(s0,s1));
+      for(let i=0;i<Math.min(FADE,chunk.length);i++) chunk[i]*=i/FADE;
+      for(let i=0;i<Math.min(FADE,chunk.length);i++) chunk[chunk.length-1-i]*=i/FADE;
+      files.push({name:fname, data:encodeWAV(chunk,sr)});
+    });
+  }
+  if(!files.length){toast('No tokens to export');return;}
+  const condStr=cond?`_${cond}`:'';
+  const zipName=`${spkId||'tokens'}${condStr}_tokens.zip`;
+  const zip=buildZIP(files);
+  const blob=new Blob([zip],{type:'application/zip'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=zipName;a.click();
+  toast(`Downloaded ${files.length} token${files.length!==1?'s':''} → ${zipName}`);
+}
+
+// ============ HELPERS ============
+function dl(name,content){
+  const b=new Blob([content],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);
+  a.download=name;a.click();
+}
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('visible');
+  setTimeout(()=>el.classList.remove('visible'),3000);
+}
+</script>
+</body>
+</html>

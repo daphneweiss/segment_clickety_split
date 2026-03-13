@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe --version)",
+      "Bash(.venv/Scripts/python.exe -c \"import PyInstaller; print\\(''PyInstaller:'', PyInstaller.__version__\\)\")",
+      "Bash(.venv/Scripts/pyinstaller.exe clickety_split.spec)",
+      "Bash(.venv/Scripts/pyinstaller.exe -y clickety_split.spec)",
+      "Bash(taskkill /F /IM ClicketySplit.exe)",
+      "Bash(taskkill //F //IM ClicketySplit.exe)",
+      "Bash(.venv/Scripts/pip.exe install:*)"
+    ]
+  }
+}

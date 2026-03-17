@@ -19,33 +19,60 @@ from pathlib import Path
 
 def pick_folder():
     """Show a native folder-picker dialog and return the chosen path."""
+    import subprocess
+
+    # Try Windows native folder picker via PowerShell
+    ps = (
+        "Add-Type -AssemblyName System.Windows.Forms; "
+        "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
+        "$d.Description = 'Select your recordings folder'; "
+        "$d.UseDescriptionForTitle = $true; "
+        "$d.ShowNewFolderButton = $false; "
+        "[void]$d.ShowDialog(); "
+        "$d.SelectedPath"
+    )
+    for ps_cmd in (['powershell.exe', '-NoProfile', '-Command', ps],  # WSL → Windows
+                   ['powershell',     '-NoProfile', '-Command', ps]):  # native Windows
+        try:
+            result = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=300)
+            folder = result.stdout.strip()
+            if not folder:
+                sys.exit(0)
+            # On WSL, convert Windows path (C:\...) to POSIX path (/mnt/c/...)
+            try:
+                conv = subprocess.run(['wslpath', folder], capture_output=True, text=True)
+                if conv.returncode == 0 and conv.stdout.strip():
+                    folder = conv.stdout.strip()
+            except Exception:
+                pass
+            return folder
+        except FileNotFoundError:
+            continue
+        except Exception:
+            break
+
+    # Fallback: tkinter
     try:
         import tkinter as tk
-        from tkinter import filedialog, messagebox
-
+        from tkinter import filedialog
         root = tk.Tk()
         root.withdraw()
         root.call('wm', 'attributes', '.', '-topmost', True)
         folder = filedialog.askdirectory(
-            title="Select your recordings folder (or a project folder containing recordings/)"
+            title="Select your recordings folder"
         )
         root.destroy()
-        if not folder:
-            try:
-                root2 = tk.Tk()
-                root2.withdraw()
-                messagebox.showinfo("Cancelled", "No folder selected — exiting.")
-                root2.destroy()
-            except Exception:
-                pass
-            sys.exit(0)
-        return folder
-    except ImportError:
-        # tkinter not available (some Linux installs) — fall back to prompt
-        folder = input("Enter project directory path: ").strip()
-        if not folder:
-            sys.exit(0)
-        return folder
+        if folder:
+            return folder
+        sys.exit(0)
+    except Exception:
+        pass
+
+    # Last resort: prompt
+    folder = input("Enter project directory path: ").strip()
+    if not folder:
+        sys.exit(0)
+    return folder
 
 
 def open_browser(url: str, delay: float = 1.5):

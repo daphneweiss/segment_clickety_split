@@ -47,6 +47,9 @@
   .progress-fill { height:100%; background:var(--accent); transition:width 0.3s; }
   .progress-text { font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; min-width:100px; text-align:right; }
 
+  .review-overview { width:100%; height:44px; background:#111316; border-bottom:1px solid var(--border); cursor:crosshair; flex-shrink:0; position:relative; }
+  #revOverviewCanvas { display:block; width:100%; height:44px; }
+
   .review-main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
 
   .review-vis { flex:1; display:flex; flex-direction:column; min-height:0; }
@@ -144,6 +147,7 @@
     <div class="progress-bar"><div class="progress-fill" id="progFill" style="width:0%"></div></div>
     <div class="progress-text" id="progText">0 / 0</div>
   </div>
+  <div class="review-overview"><canvas id="revOverviewCanvas"></canvas></div>
   <div class="add-mode-banner" id="addBanner">ADD TOKEN MODE — click waveform to set start boundary</div>
   <div class="review-main">
     <div class="review-vis">
@@ -362,6 +366,7 @@ function initReview() {
   rebuildWordSegs();
   curIdx=0;
   resizeAllCanvases();
+  setupOverviewInteraction();
   showCurrentToken();
   window.addEventListener('resize', ()=>{ resizeAllCanvases(); if(wordSegs.length) drawAll(segs[wordSegs[curIdx]]); });
   document.getElementById('statusText').textContent=
@@ -416,6 +421,58 @@ function showCurrentToken() {
 function drawAll(seg) {
   drawRevWaveform(seg);
   drawSpectrogram(seg);
+  drawOverview(seg);
+}
+
+function drawOverview(currentSeg) {
+  const canvas=document.getElementById('revOverviewCanvas');
+  if(!canvas||!audioBuf) return;
+  const ctx=canvas.getContext('2d');
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  canvas.width=w; canvas.height=h;
+  ctx.fillStyle='#111316'; ctx.fillRect(0,0,w,h);
+
+  // Mini waveform
+  const raw=audioBuf.getChannelData(0), dur=audioBuf.duration, mid=h/2;
+  ctx.strokeStyle='#3a4a5a'; ctx.lineWidth=1; ctx.beginPath();
+  for(let px=0;px<w;px++){
+    const s0=Math.floor((px/w)*raw.length), s1=Math.floor(((px+1)/w)*raw.length);
+    let mn=1,mx=-1;
+    for(let s=s0;s<s1;s++){if(raw[s]<mn)mn=raw[s];if(raw[s]>mx)mx=raw[s];}
+    ctx.moveTo(px,mid-mx*mid*0.85); ctx.lineTo(px,mid-mn*mid*0.85);
+  }
+  ctx.stroke();
+
+  // All segment regions
+  for(const seg of segs){
+    if(seg.segment_type!=='word') continue;
+    const x1=(seg.start/dur)*w, x2=(seg.end/dur)*w;
+    const isCurrent=(seg===currentSeg);
+    ctx.fillStyle=isCurrent?'rgba(247,201,72,0.35)':'rgba(74,144,217,0.18)';
+    ctx.fillRect(x1,0,x2-x1,h);
+    ctx.strokeStyle=isCurrent?'#f7c948':'#4a90d9';
+    ctx.lineWidth=isCurrent?2:1;
+    ctx.beginPath(); ctx.moveTo(x1,0); ctx.lineTo(x1,h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x2,0); ctx.lineTo(x2,h); ctx.stroke();
+  }
+
+  // Current view window
+  const vx1=(viewStart/dur)*w, vx2=(viewEnd/dur)*w;
+  ctx.fillStyle='rgba(255,255,255,0.07)'; ctx.fillRect(vx1,0,vx2-vx1,h);
+  ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=1; ctx.strokeRect(vx1,0,vx2-vx1,h);
+}
+
+function setupOverviewInteraction() {
+  const canvas=document.getElementById('revOverviewCanvas');
+  canvas.addEventListener('click', e=>{
+    if(!audioBuf||wordSegs.length===0) return;
+    const x=e.clientX-canvas.getBoundingClientRect().left;
+    const t=(x/canvas.clientWidth)*audioBuf.duration;
+    const span=viewEnd-viewStart;
+    viewStart=Math.max(0, t-span/2);
+    viewEnd=Math.min(audioBuf.duration, viewStart+span);
+    drawAll(segs[wordSegs[curIdx]]);
+  });
 }
 
 function drawRevWaveform(seg) {
@@ -487,9 +544,15 @@ function setupDragCanvas(canvasId, seg) {
     const x=e.clientX-newIc.getBoundingClientRect().left;
     downX=x;
     if(addMode){ handleAddClick(xToT(x)); return; }
-    const sx=tToX(seg.start), ex=tToX(seg.end);
-    if(Math.abs(x-sx)<10) dragging='start';
-    else if(Math.abs(x-ex)<10) dragging='end';
+    // Midpoint rule: left half → move start, right half → move end
+    const mid=(tToX(seg.start)+tToX(seg.end))/2;
+    dragging=(x<=mid)?'start':'end';
+    // Immediately snap boundary to click position
+    const t=Math.max(0,Math.min(audioBuf.duration,xToT(x)));
+    if(dragging==='start'&&t<seg.end-0.01){ seg.start=Math.round(t*1e4)/1e4; seg.duration_ms=Math.round((seg.end-seg.start)*1e3); }
+    if(dragging==='end'&&t>seg.start+0.01){ seg.end=Math.round(t*1e4)/1e4; seg.duration_ms=Math.round((seg.end-seg.start)*1e3); }
+    drawAll(seg);
+    document.getElementById('rvTimeInfo').textContent=`${seg.start.toFixed(3)}–${seg.end.toFixed(3)}s (${seg.duration_ms.toFixed(0)}ms)`;
   });
   newIc.addEventListener('mousemove', e=>{
     const x=e.clientX-newIc.getBoundingClientRect().left;
@@ -497,30 +560,15 @@ function setupDragCanvas(canvasId, seg) {
       const t=Math.max(0,Math.min(audioBuf.duration,xToT(x)));
       if(dragging==='start'&&t<seg.end-0.01){ seg.start=Math.round(t*1e4)/1e4; seg.duration_ms=Math.round((seg.end-seg.start)*1e3); }
       if(dragging==='end'&&t>seg.start+0.01){ seg.end=Math.round(t*1e4)/1e4; seg.duration_ms=Math.round((seg.end-seg.start)*1e3); }
-      drawAll(seg); // viewStart/viewEnd stay fixed — boundaries move independently
+      drawAll(seg);
       document.getElementById('rvTimeInfo').textContent=`${seg.start.toFixed(3)}–${seg.end.toFixed(3)}s (${seg.duration_ms.toFixed(0)}ms)`;
     } else {
       if(addMode){ newIc.style.cursor='crosshair'; return; }
-      const sx=tToX(seg.start), ex=tToX(seg.end);
-      newIc.style.cursor=(Math.abs(x-sx)<50||Math.abs(x-ex)<50)?'ew-resize':'default';
+      const mid=(tToX(seg.start)+tToX(seg.end))/2;
+      newIc.style.cursor=(x<=mid)?'w-resize':'e-resize';
     }
   });
-  newIc.addEventListener('mouseup', e=>{
-    const x=e.clientX-newIc.getBoundingClientRect().left;
-    // Click (no significant drag) within 50px of a boundary → snap it
-    if(!addMode && dragging===null && downX!==null && Math.abs(x-downX)<4){
-      const sx=tToX(seg.start), ex=tToX(seg.end);
-      const dStart=Math.abs(x-sx), dEnd=Math.abs(x-ex);
-      if(dStart<50||dEnd<50){
-        const t=Math.max(0,Math.min(audioBuf.duration,xToT(x)));
-        if(dStart<=dEnd && t<seg.end-0.01){ seg.start=Math.round(t*1e4)/1e4; seg.duration_ms=Math.round((seg.end-seg.start)*1e3); }
-        else if(dEnd<dStart && t>seg.start+0.01){ seg.end=Math.round(t*1e4)/1e4; seg.duration_ms=Math.round((seg.end-seg.start)*1e3); }
-        drawAll(seg);
-        document.getElementById('rvTimeInfo').textContent=`${seg.start.toFixed(3)}–${seg.end.toFixed(3)}s (${seg.duration_ms.toFixed(0)}ms)`;
-      }
-    }
-    dragging=null; downX=null;
-  });
+  newIc.addEventListener('mouseup', ()=>{ dragging=null; downX=null; });
   newIc.addEventListener('mouseleave', ()=>{ dragging=null; downX=null; });
 }
 

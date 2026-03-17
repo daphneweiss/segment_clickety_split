@@ -395,12 +395,12 @@ def api_export():
         # Fallback: original audio
         audio_path = seg_data.get("audio_file") or seg_data.get("denoised_audio_file")
     if not audio_path or not Path(audio_path).is_file():
-        rec_dir = RECORDINGS_DIR / speaker / condition
+        rec_dir = _rec_dir(speaker, condition)
         candidates = seg_engine.find_all_audio_files(rec_dir)
         if candidates:
             audio_path = str(candidates[0])
     if not audio_path:
-        return jsonify({"error": "Audio file not found"}), 400
+        return jsonify({"error": f"Audio file not found (looked in {_rec_dir(speaker, condition)})"}), 400
 
     audio, sr = sf.read(audio_path, dtype="float64")
     if audio.ndim > 1:

@@ -1641,11 +1641,20 @@ async function exportAll() {
     }).then(r => r.json());
 
     let total = 0;
+    const errors = [];
+    let outputDir = '';
     for (const r of results) {
       if (r.n_exported) total += r.n_exported;
+      if (r.error) errors.push(`${r.condition}: ${r.error}`);
+      if (r.output_dir) outputDir = r.output_dir;
     }
-    status.textContent = `Exported ${total} tokens across ${results.length} conditions`;
-    toast(`Export complete: ${total} tokens`);
+    if (errors.length) {
+      status.textContent = `Export errors: ${errors.join(' | ')}`;
+      toast(`Export failed: ${errors[0]}`);
+    } else {
+      status.textContent = `Exported ${total} tokens → ${outputDir}`;
+      toast(`Export complete: ${total} tokens`);
+    }
   } catch (e) {
     status.textContent = `Error: ${e.message}`;
   } finally {

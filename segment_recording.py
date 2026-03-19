@@ -606,19 +606,22 @@ def classify_and_label(segments, stimuli):
         return segments
 
     # ---- Detect INTRO block ----
+    # Only look for an intro gap in the first few segments (not deep into the
+    # recording).  The gap must be substantially larger than typical inter-word
+    # gaps to avoid swallowing real early tokens.
     gaps = []
     for i in range(1, n_seg):
         gaps.append(segments[i]["start"] - segments[i - 1]["end"])
 
     intro_end_idx = 0
     if len(gaps) >= 2:
-        scan_range = max(3, min(len(gaps), n_seg // 3))
+        scan_range = min(10, len(gaps))
         early_gaps = gaps[:scan_range]
         max_early_idx = int(np.argmax(early_gaps))
         max_early_gap = early_gaps[max_early_idx]
         later_gaps = gaps[scan_range:] if len(gaps) > scan_range else gaps
         median_later = np.median(later_gaps)
-        if max_early_gap > median_later * 1.5 and max_early_gap > 0.6:
+        if max_early_gap > median_later * 3.0 and max_early_gap > 1.5:
             intro_end_idx = max_early_idx + 1
 
     for i in range(intro_end_idx):

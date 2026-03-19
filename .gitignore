@@ -4,6 +4,9 @@ __pycache__/
 *.pkl
 sessions/
 
+# Large zip distributions — distribute via GitHub Releases, not committed to repo
+*.zip
+
 # PyInstaller build artifacts — distribute via GitHub Releases, not committed to repo
 dist/
 build/

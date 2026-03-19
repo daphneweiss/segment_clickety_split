@@ -531,7 +531,10 @@ async function autoDetectConditions() {
     const matched = availStimLists.find(s => {
       const sLow = s.toLowerCase();
       const cLow = c.name.toLowerCase();
-      return sLow.includes(cLow) || cLow.split('_').every(part => sLow.includes(part));
+      if (sLow.includes(cLow)) return true;
+      // Require all meaningful parts (>1 char) to match
+      const parts = cLow.split('_').filter(p => p.length > 1);
+      return parts.length > 0 && parts.every(part => sLow.includes(part));
     }) || '';
     addCondRow(c.name, matched);
   }
@@ -1236,6 +1239,7 @@ function rvAccept() {
   const seg = segs[wordSegs[curIdx]];
   seg.assigned_name = wInput.value;
   seg.accepted = true;
+  seg.status = 'reviewed';
   reviewState[curIdx] = { reviewed: true, accepted: true };
   rebuildWordSegs(); // renumber token_index after name change
 
@@ -1272,7 +1276,9 @@ function rvAccept() {
 }
 function rvReject() {
   if (wordSegs.length === 0) return;
-  segs[wordSegs[curIdx]].accepted = false;
+  const seg = segs[wordSegs[curIdx]];
+  seg.accepted = false;
+  seg.status = 'reviewed';
   reviewState[curIdx] = { reviewed: true, accepted: false };
   rvAdvance();
 }
@@ -1614,12 +1620,28 @@ function initExportStep() {
     const div = document.createElement('div');
     div.className = 'export-cond';
     div.innerHTML = `
-      <span class="ec-name">${cc.condition}</span>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0">
+        <input type="checkbox" class="export-cond-cb" data-cond="${cc.condition}" checked>
+        <span class="ec-name">${cc.condition}</span>
+      </label>
       <span class="ec-stat ${hasReview ? 'ec-ok' : 'ec-warn'}">${hasReview ? '✓ reviewed' : '⚠ not reviewed'}</span>
       <span class="ec-stat">${nSelected} tokens (${nWords} words)</span>
     `;
     list.appendChild(div);
   }
+  updateExportBtn();
+  list.addEventListener('change', e => {
+    if (e.target.classList.contains('export-cond-cb')) updateExportBtn();
+  });
+}
+
+function updateExportBtn() {
+  const checked = document.querySelectorAll('.export-cond-cb:checked');
+  const btn = document.getElementById('exportAllBtn');
+  btn.textContent = checked.length === condConfigs.length
+    ? 'Export All Conditions'
+    : `Export ${checked.length} Condition${checked.length !== 1 ? 's' : ''}`;
+  btn.disabled = checked.length === 0;
 }
 
 async function exportAll() {
@@ -1628,9 +1650,15 @@ async function exportAll() {
   btn.disabled = true;
   status.textContent = 'Exporting...';
 
+  // Only export checked conditions
+  const checkedConds = Array.from(document.querySelectorAll('.export-cond-cb:checked'))
+    .map(cb => cb.dataset.cond);
+  if (!checkedConds.length) { status.textContent = 'No conditions selected'; btn.disabled = false; return; }
+
   // Build selections in serializable format
   const allSel = {};
-  for (const cond in tokenSelections) {
+  for (const cond of checkedConds) {
+    if (!tokenSelections[cond]) continue;
     allSel[cond] = {};
     for (const word in tokenSelections[cond]) {
       allSel[cond][word] = Array.from(tokenSelections[cond][word]);
@@ -1643,7 +1671,7 @@ async function exportAll() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         speaker: speakerId,
-        conditions: condConfigs.map(c => c.condition),
+        conditions: checkedConds,
         selections: allSel,
       }),
     }).then(r => r.json());
@@ -1709,8 +1737,30 @@ async function saveSession() {
     };
   }
 
-  const name = prompt('Session name:', `${speakerId || 'session'}_${new Date().toISOString().slice(0, 10)}`);
+  const defaultName = `${speakerId || 'session'}_${new Date().toISOString().slice(0, 10)}`;
+  let name = prompt('Session name:', defaultName);
   if (!name) return;
+
+  // Check if a session with this name already exists with different conditions
+  const curConds = condConfigs.map(c => c.condition).sort().join(',');
+  const existing = await fetch(`/api/session_conditions/${encodeURIComponent(name)}`).then(r => r.json());
+  if (existing.exists) {
+    const savedConds = (existing.conditions || []).sort().join(',');
+    if (savedConds && savedConds !== curConds) {
+      const suffix = `_${condConfigs.length}cond`;
+      const altName = name.replace(/_\d+cond$/, '') + suffix;
+      const choice = prompt(
+        `"${name}" was saved with different conditions:\n` +
+        `  Saved: ${existing.conditions.join(', ')}\n` +
+        `  Current: ${condConfigs.map(c => c.condition).join(', ')}\n\n` +
+        `Enter a new name to avoid overwriting, or keep the same name to overwrite:`,
+        altName
+      );
+      if (!choice) return;
+      name = choice;
+    }
+  }
+
   const resp = await fetch('/api/save_session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

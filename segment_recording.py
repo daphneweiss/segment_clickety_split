@@ -621,8 +621,13 @@ def classify_and_label(segments, stimuli):
         max_early_gap = early_gaps[max_early_idx]
         later_gaps = gaps[scan_range:] if len(gaps) > scan_range else gaps
         median_later = np.median(later_gaps)
+        print(f"    [intro check] largest early gap={max_early_gap:.2f}s at idx {max_early_idx}, "
+              f"median later gap={median_later:.2f}s, threshold={median_later * 3.0:.2f}s / 1.5s")
         if max_early_gap > median_later * 3.0 and max_early_gap > 1.5:
             intro_end_idx = max_early_idx + 1
+            print(f"    [intro check] → marking segments 0..{intro_end_idx - 1} as intro")
+        else:
+            print(f"    [intro check] → no intro detected")
 
     for i in range(intro_end_idx):
         segments[i]["segment_type"] = "intro"
@@ -647,12 +652,16 @@ def classify_and_label(segments, stimuli):
             seg["status"] = "crosstalk"
 
     # ---- Filter sub-word-length segments as noise ----
+    noise_count = 0
     for i, seg in non_intro:
         if seg.get("segment_type") not in ("intro", "crosstalk"):
             if seg["duration_ms"] < WORD_DUR_MIN_MS:
                 seg["segment_type"] = "noise"
                 seg["assigned_name"] = "noise"
                 seg["status"] = "noise"
+                noise_count += 1
+    if noise_count:
+        print(f"    [noise filter] removed {noise_count} segments < {WORD_DUR_MIN_MS}ms")
 
     # ---- Collect word candidates ----
     word_cands = [(i, s) for i, s in enumerate(segments)
@@ -754,7 +763,24 @@ def load_stimulus_list(path, condition=None):
         # Skip header row if first cell looks like a column name
         _HEADER_NAMES = {'word', 'words', 'stimulus', 'stimuli', 'stim', 'item', 'items'}
         data_rows = rows[1:] if rows[0][0].strip().lower() in _HEADER_NAMES else rows
-        has_cond_col = any(len(r) >= 2 for r in data_rows)
+        # Only treat the second column as a condition label if at least one
+        # row's second column actually matches the requested condition name.
+        # This avoids false filtering when column 2 is something else
+        # (phonetic transcription, category, etc.).
+        has_cond_col = False
+        if condition:
+            cond_lower = condition.lower()
+            has_cond_col = any(
+                len(r) >= 2 and r[1].strip().lower() == cond_lower
+                for r in data_rows
+            )
+            if has_cond_col:
+                print(f"    [stimlist] CSV column 2 matches condition '{condition}' — filtering rows")
+            else:
+                col2_vals = sorted(set(r[1].strip() for r in data_rows if len(r) >= 2 and r[1].strip()))
+                if col2_vals:
+                    print(f"    [stimlist] CSV has column 2 but no match for '{condition}' "
+                          f"(found: {col2_vals[:5]}) — using all words")
         filtered = []
         for row in data_rows:
             word = row[0].strip()
@@ -764,9 +790,6 @@ def load_stimulus_list(path, condition=None):
                 if row[1].strip().lower() != condition.lower():
                     continue
             filtered.append(word)
-        # Fall back to all words if condition filter matched nothing
-        if condition and has_cond_col and not filtered:
-            filtered = [r[0].strip() for r in data_rows if r and r[0].strip() and not r[0].startswith('#')]
         stimuli = filtered
     else:
         with open(path, encoding='utf-8') as f:

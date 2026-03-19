@@ -258,6 +258,11 @@ def api_detect():
     # Output directory
     out_dir = EXPERIMENT_DIR / speaker / condition
 
+    # Remove stale reviewed segments so re-detection results aren't shadowed
+    old_reviewed = out_dir / "reviewed_segments.json"
+    if old_reviewed.is_file():
+        old_reviewed.unlink()
+
     denoise = params.get("denoise", True)
 
     # Run detection
@@ -422,7 +427,10 @@ def api_export():
         if seg.get("segment_type") == "word" and seg.get("accepted", True):
             seg["cluster_size"] = word_counter_renum.get(seg.get("assigned_name", ""), 1)
 
-    # If selected_tokens is provided, filter to only the selected positional indices
+    # If selected_tokens is provided, filter to only the selected positional indices.
+    # Otherwise, only export tokens that were explicitly reviewed and accepted
+    # (status == "reviewed") — skip unreviewed tokens that just have the default
+    # accepted=true.
     if selected_tokens:
         filtered = []
         for seg in segments:
@@ -437,7 +445,14 @@ def api_export():
                     filtered.append(seg)
         exported, manifest = seg_engine.export_tokens(audio, sr, filtered, str(out_dir), speaker)
     else:
-        exported, manifest = seg_engine.export_tokens(audio, sr, segments, str(out_dir), speaker)
+        reviewed_segs = [s for s in segments
+                         if s.get("segment_type") == "word"
+                         and s.get("accepted", True)
+                         and s.get("status") == "reviewed"]
+        # Fall back to all accepted words only if every word segment has been reviewed
+        if not reviewed_segs:
+            reviewed_segs = segments
+        exported, manifest = seg_engine.export_tokens(audio, sr, reviewed_segs, str(out_dir), speaker)
 
     return jsonify({
         "status": "ok",
@@ -539,6 +554,22 @@ def api_sessions():
         if f.suffix == ".pkl"
     ], key=lambda x: x["modified"], reverse=True)
     return jsonify(files)
+
+
+@app.route("/api/session_conditions/<name>")
+def api_session_conditions(name):
+    """Return the condition list stored in a saved session."""
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+    path = SESSIONS_DIR / f"{safe_name}.pkl"
+    if not path.is_file():
+        return jsonify({"exists": False, "conditions": []})
+    try:
+        with open(path, "rb") as f:
+            state = pickle.load(f)
+        conds = sorted(state.get("conditions", {}).keys())
+        return jsonify({"exists": True, "conditions": conds})
+    except Exception:
+        return jsonify({"exists": False, "conditions": []})
 
 
 @app.route("/api/session")

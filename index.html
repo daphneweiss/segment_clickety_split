@@ -437,6 +437,11 @@ async function onSpeakerChange() {
   if (!speakerId) return;
   availConditions = await fetch(`/api/conditions/${speakerId}`).then(r => r.json());
   document.getElementById('condTableBody').innerHTML = '';
+  // Reset all per-speaker state so review step loads fresh
+  condConfigs = [];
+  condData = {};
+  activeCond = '';
+  document.getElementById('condPills').innerHTML = '';
 }
 
 function addCondRow(cond = '', stimlist = '') {

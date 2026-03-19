@@ -8,8 +8,7 @@ Interactive recording segmentation tool for speech perception experiments. Detec
 ### Disclaimer
 Like many academic scripts, this project was built by one person with one set of experiments in mind, and has not been extensively tested outside that context. Always run any processing tool on a COPY of your original stimuli. 
 
-I recommend running this natively in Python rather than using the executable.
-
+The native Python workflow, described below, is better tested than the exectuable. 
 ---
 
 

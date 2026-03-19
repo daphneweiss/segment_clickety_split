@@ -566,6 +566,7 @@ async function runDetectAll() {
   if (!cfg.conditions.length) { toast('Add at least one condition'); return; }
 
   condConfigs = cfg.conditions;
+  condData = {};  // clear stale cache so review loads fresh detection results
 
   const btn = document.getElementById('detectAllBtn');
   const status = document.getElementById('detectStatus');
@@ -645,7 +646,7 @@ async function switchReviewCond(cond) {
   rawSamples = cd.rawSamples;
   wordSegs = cd.wordSegs;
   reviewState = cd.reviewState;
-  curIdx = cd.curIdx || 0;
+  curIdx = Math.min(cd.curIdx || 0, Math.max(0, cd.wordSegs.length - 1));
   stimCursor = cd.stimCursor || 0;
   stimRepCount = cd.stimRepCount || 0;
 
@@ -710,7 +711,7 @@ async function loadCondData(cond) {
   // Restore saved review progress if available
   const rp = window._pendingReviewProgress && window._pendingReviewProgress[cond];
   if (rp) {
-    condData[cond].curIdx = rp.curIdx || 0;
+    condData[cond].curIdx = Math.min(rp.curIdx || 0, Math.max(0, ws.length - 1));
     condData[cond].stimCursor = rp.stimCursor || 0;
     condData[cond].stimRepCount = rp.stimRepCount || 0;
     if (rp.reviewState && rp.reviewState.length === ws.length) {
@@ -737,8 +738,10 @@ function resizeSet(wrapId, ids) {
 
 function showCurrentToken() {
   if (!audioBuf || wordSegs.length === 0) return;
+  if (curIdx >= wordSegs.length) curIdx = Math.max(0, wordSegs.length - 1);
   const segIdx = wordSegs[curIdx];
   const seg = segs[segIdx];
+  if (!seg) return;
 
   const reviewed = reviewState.filter(r => r.reviewed).length;
   document.getElementById('progFill').style.width = `${(reviewed / wordSegs.length) * 100}%`;
